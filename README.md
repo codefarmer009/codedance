@@ -1,107 +1,228 @@
-# codedance
+# Codedance - Kubernetes 智能发布系统
 
-A modern web application for dance enthusiasts.
+基于 Kubernetes 的智能发布系统，支持灰度发布、实时监控、自动暂停和回滚。
 
-## Overview
+## 概述
 
-Codedance is a platform designed to bring together the world of dance and technology. Whether you're a dancer, choreographer, or dance enthusiast, this project aims to provide tools and resources to enhance your dance journey.
+Codedance 是一个企业级的 Kubernetes 灰度发布解决方案，提供：
 
-## Features
+- **智能灰度发布**: 支持线性、指数和手动三种发布策略
+- **实时健康监控**: 基于 Prometheus 的指标分析和健康评分
+- **自动决策引擎**: 根据指标自动决定继续、暂停或回滚
+- **多种流量管理**: 支持 Istio 和 Nginx Ingress
+- **故障自动回滚**: 检测异常自动回滚到稳定版本
 
-- **Dance Library**: Browse and explore various dance styles and techniques
-- **Tutorial System**: Learn new moves with step-by-step tutorials
-- **Community Hub**: Connect with other dancers and share your progress
-- **Practice Tracker**: Log your practice sessions and track improvement
+## 核心特性
 
-## Getting Started
+### 灰度发布策略
 
-### Prerequisites
+- **线性递增 (Linear)**: 5% → 10% → 25% → 50% → 75% → 100%
+- **指数递增 (Exponential)**: 1% → 5% → 10% → 25% → 50% → 100%
+- **手动控制 (Manual)**: 用户手动控制每个阶段的流量切换
 
-Before you begin, ensure you have the following installed:
-- Node.js (v16 or higher)
-- npm or yarn
-- Git
+### 监控与决策
 
-### Installation
+- **成功率监控**: 实时监控 HTTP 2xx 响应占比
+- **延迟分析**: P50/P90/P99 延迟指标
+- **错误率追踪**: HTTP 5xx 错误率监控
+- **Pod 健康检查**: 自动检测 Pod 状态
+- **智能决策**: 基于多维度指标自动决策
 
-1. Clone the repository:
+### 流量管理
+
+- **Istio 支持**: 基于 VirtualService 和 DestinationRule
+- **Nginx Ingress**: 使用 Canary Annotations
+- **动态权重调整**: 平滑的流量切换
+
+### 自动回滚
+
+- **指标异常回滚**: 成功率、延迟、错误率超阈值自动回滚
+- **Pod 崩溃回滚**: 检测到 Pod 异常自动回滚
+- **手动回滚**: 支持用户手动触发回滚
+
+## 快速开始
+
+### 前置条件
+
+- Kubernetes 集群 (v1.24+)
+- kubectl 命令行工具
+- Prometheus 监控系统
+- Istio 或 Nginx Ingress Controller
+- Go 1.21+ (用于开发)
+
+### 安装
+
+1. 克隆仓库：
 ```bash
 git clone https://github.com/codefarmer009/codedance.git
 cd codedance
 ```
 
-2. Install dependencies:
+2. 安装 CRD：
 ```bash
-npm install
+kubectl apply -f config/crd/canary_deployment.yaml
 ```
 
-3. Set up environment variables:
+3. 创建 RBAC 权限：
 ```bash
-cp .env.example .env
+kubectl apply -f config/rbac/
 ```
 
-4. Start the development server:
+4. 部署控制器：
 ```bash
-npm run dev
+kubectl apply -f deploy/kubernetes/controller.yaml
 ```
 
-The application should now be running at `http://localhost:3000`
+5. 验证安装：
+```bash
+kubectl get pods -n codedance-system
+```
 
-## Usage
+### 使用示例
 
-[Add usage instructions here as the project develops]
+1. 部署应用：
+```bash
+kubectl apply -f config/samples/deployment_example.yaml
+```
 
-## Project Structure
+2. 创建灰度发布：
+```bash
+kubectl apply -f config/samples/example_canary.yaml
+```
+
+3. 查看发布状态：
+```bash
+kubectl get canarydeployment -n production
+kubectl describe canarydeployment codedance-app -n production
+```
+
+## 项目结构
 
 ```
 codedance/
-├── src/           # Source code
-├── public/        # Static assets
-├── tests/         # Test files
-├── docs/          # Documentation
-└── README.md      # This file
+├── cmd/                    # 主程序入口
+│   ├── controller/         # 控制器主程序
+│   ├── api-server/         # API 服务器
+│   └── cli/                # 命令行工具
+├── pkg/                    # 核心代码包
+│   ├── apis/               # API 定义
+│   │   └── deploy/v1alpha1/  # CRD 类型定义
+│   ├── controller/         # 控制器逻辑
+│   ├── metrics/            # 指标收集
+│   ├── traffic/            # 流量管理
+│   ├── strategy/           # 发布策略
+│   └── utils/              # 工具函数
+├── config/                 # 配置文件
+│   ├── crd/                # CRD 定义
+│   ├── rbac/               # RBAC 配置
+│   └── samples/            # 示例配置
+├── deploy/                 # 部署文件
+│   ├── kubernetes/         # K8s 部署清单
+│   └── helm/               # Helm Charts
+├── docs/                   # 文档
+│   ├── architecture.md     # 架构设计
+│   ├── getting-started.md  # 快速开始
+│   └── api-reference.md    # API 参考
+├── Dockerfile              # Docker 镜像
+├── Makefile                # 构建脚本
+└── go.mod                  # Go 模块定义
 ```
 
-## Development
+## 开发指南
 
-### Running Tests
+### 本地运行
 
 ```bash
-npm test
+make controller
 ```
 
-### Building for Production
+或者：
 
 ```bash
-npm run build
+go run cmd/controller/main.go --kubeconfig=$HOME/.kube/config
 ```
 
-### Code Style
-
-This project follows standard code formatting conventions. Please ensure your code is properly formatted before submitting:
+### 构建
 
 ```bash
-npm run lint
+make build
 ```
 
-## Contributing
+### 构建 Docker 镜像
 
-Contributions are welcome! Please follow these steps:
+```bash
+make docker-build VERSION=v1.0.0
+```
 
-1. Fork the repository
-2. Create a new branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Commit your changes (`git commit -m 'Add some amazing feature'`)
-5. Push to the branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
+### 运行测试
 
-## Roadmap
+```bash
+make test
+```
 
-- [ ] User authentication and profiles
-- [ ] Video upload and streaming
-- [ ] Real-time collaboration features
-- [ ] Mobile app development
-- [ ] AI-powered move recognition
+### 代码格式化
+
+```bash
+make fmt
+```
+
+## 架构设计
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    发布控制平面                                │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │ 发布控制器    │  │ 监控分析器    │  │ 决策引擎      │      │
+│  │ (Controller) │→ │ (Analyzer)   │→ │ (Decider)    │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+│         ↓                 ↑                  ↓               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │ 流量管理器    │  │ 指标收集器    │  │ 回滚管理器    │      │
+│  │ (Traffic)    │  │ (Metrics)    │  │ (Rollback)   │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│                  Kubernetes 集群                              │
+│  ┌─────────────┐        ┌─────────────┐                     │
+│  │  Stable     │  ←→   │  Canary     │                     │
+│  │  Pods (v1)  │        │  Pods (v2)  │                     │
+│  └─────────────┘        └─────────────┘                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+详细架构设计请参考 [架构文档](docs/architecture.md)。
+
+## 文档
+
+- [快速开始指南](docs/getting-started.md)
+- [架构设计文档](docs/architecture.md)
+- [API 参考文档](docs/api-reference.md)
+
+## 贡献指南
+
+欢迎贡献！请遵循以下步骤：
+
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add some amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 创建 Pull Request
+
+## 开发路线图
+
+- [x] 核心灰度发布功能
+- [x] Prometheus 指标集成
+- [x] Istio 流量管理
+- [x] Nginx Ingress 支持
+- [x] 自动回滚机制
+- [ ] Web 管理界面
+- [ ] CLI 命令行工具
+- [ ] 多集群支持
+- [ ] Helm Chart 支持
+- [ ] AI 决策优化
+- [ ] 成本分析功能
 
 ## License
 

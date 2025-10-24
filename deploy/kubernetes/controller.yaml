@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: codedance-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: codedance-controller
+  namespace: codedance-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: codedance-controller
+  template:
+    metadata:
+      labels:
+        app: codedance-controller
+    spec:
+      serviceAccountName: codedance-controller
+      containers:
+        - name: controller
+          image: codedance-controller:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --prometheus-url=http://prometheus:9090
+            - --use-istio=true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace

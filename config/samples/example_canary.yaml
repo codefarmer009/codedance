@@ -1,0 +1,48 @@
+apiVersion: deploy.codedance.io/v1alpha1
+kind: CanaryDeployment
+metadata:
+  name: codedance-app
+  namespace: production
+spec:
+  targetDeployment: codedance
+  canaryVersion: codedance:v2.0.0
+  
+  strategy:
+    type: Linear
+    steps:
+      - weight: 5
+        pause: 5m
+      - weight: 10
+        pause: 5m
+      - weight: 25
+        pause: 10m
+      - weight: 50
+        pause: 10m
+      - weight: 75
+        pause: 10m
+      - weight: 100
+        pause: 0s
+  
+  metrics:
+    successRate:
+      threshold: 99.5
+      query: |
+        sum(rate(http_requests_total{app="codedance",status=~"2.."}[5m])) /
+        sum(rate(http_requests_total{app="codedance"}[5m])) * 100
+    
+    latency:
+      p99: 500ms
+      query: |
+        histogram_quantile(0.99,
+          sum(rate(http_request_duration_seconds_bucket{app="codedance"}[5m])) by (le))
+    
+    errorRate:
+      threshold: 0.5
+      query: |
+        sum(rate(http_requests_total{app="codedance",status=~"5.."}[5m])) /
+        sum(rate(http_requests_total{app="codedance"}[5m])) * 100
+  
+  autoRollback:
+    enabled: true
+    onMetricsFail: true
+    onPodCrash: true
