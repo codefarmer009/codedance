@@ -15,7 +15,6 @@ func NewDefaultDecisionEngine() *DefaultDecisionEngine {
 
 func (d *DefaultDecisionEngine) Evaluate(metrics *HealthMetrics, thresholds deployv1alpha1.MetricsConfig) Decision {
 	score := 0
-	maxScore := 100
 
 	if metrics.SuccessRate >= thresholds.SuccessRate.Threshold {
 		score += 40
@@ -50,8 +49,15 @@ func (d *DefaultDecisionEngine) Evaluate(metrics *HealthMetrics, thresholds depl
 		}
 	}
 
-	podHealthRate := float64(metrics.PodHealth.Ready) /
-		float64(metrics.PodHealth.Ready+metrics.PodHealth.NotReady)
+	totalPods := metrics.PodHealth.Ready + metrics.PodHealth.NotReady
+	if totalPods == 0 {
+		return Decision{
+			Action: PauseAction,
+			Reason: "没有可用的 Pod",
+		}
+	}
+
+	podHealthRate := float64(metrics.PodHealth.Ready) / float64(totalPods)
 	if podHealthRate < 0.8 {
 		return Decision{
 			Action: PauseAction,

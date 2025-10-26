@@ -10,10 +10,14 @@ import (
 	promapi "github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 type PrometheusAnalyzer struct {
 	promClient v1.API
+	clientset  *kubernetes.Clientset
 }
 
 func NewPrometheusAnalyzer(promURL string) (*PrometheusAnalyzer, error) {
@@ -26,6 +30,20 @@ func NewPrometheusAnalyzer(promURL string) (*PrometheusAnalyzer, error) {
 
 	return &PrometheusAnalyzer{
 		promClient: v1.NewAPI(client),
+	}, nil
+}
+
+func NewPrometheusAnalyzerWithClientset(promURL string, clientset *kubernetes.Clientset) (*PrometheusAnalyzer, error) {
+	client, err := promapi.NewClient(promapi.Config{
+		Address: promURL,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &PrometheusAnalyzer{
+		promClient: v1.NewAPI(client),
+		clientset:  clientset,
 	}, nil
 }
 
@@ -132,11 +150,48 @@ func (m *PrometheusAnalyzer) queryErrorRate(ctx context.Context, canary *deployv
 }
 
 func (m *PrometheusAnalyzer) queryPodHealth(ctx context.Context, canary *deployv1alpha1.CanaryDeployment) (controller.PodHealthMetrics, error) {
-	return controller.PodHealthMetrics{
-		Ready:    3,
-		NotReady: 0,
-		Failed:   0,
-	}, nil
+	if m.clientset == nil {
+		return controller.PodHealthMetrics{
+			Ready:    3,
+			NotReady: 0,
+			Failed:   0,
+		}, nil
+	}
+
+	selector := fmt.Sprintf("app=%s,version=%s", canary.Spec.TargetDeployment, canary.Spec.CanaryVersion)
+	pods, err := m.clientset.CoreV1().Pods(canary.Namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: selector,
+	})
+	if err != nil {
+		return controller.PodHealthMetrics{}, fmt.Errorf("failed to list pods: %w", err)
+	}
+
+	podHealth := controller.PodHealthMetrics{}
+	for _, pod := range pods.Items {
+		switch pod.Status.Phase {
+		case corev1.PodRunning:
+			if isPodReady(&pod) {
+				podHealth.Ready++
+			} else {
+				podHealth.NotReady++
+			}
+		case corev1.PodFailed:
+			podHealth.Failed++
+		default:
+			podHealth.NotReady++
+		}
+	}
+
+	return podHealth, nil
+}
+
+func isPodReady(pod *corev1.Pod) bool {
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }
 
 func parseFloatFromResult(result model.Value) float64 {

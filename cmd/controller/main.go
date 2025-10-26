@@ -11,15 +11,16 @@ import (
 	"github.com/codefarmer009/codedance/pkg/controller"
 	"github.com/codefarmer009/codedance/pkg/metrics"
 	"github.com/codefarmer009/codedance/pkg/traffic"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 var (
-	kubeconfig  string
+	kubeconfig    string
 	prometheusURL string
-	useIstio    bool
+	useIstio      bool
 )
 
 func init() {
@@ -43,7 +44,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	metricsAnalyzer, err := metrics.NewPrometheusAnalyzer(prometheusURL)
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create dynamic client: %v\n", err)
+		os.Exit(1)
+	}
+
+	metricsAnalyzer, err := metrics.NewPrometheusAnalyzerWithClientset(prometheusURL, clientset)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create metrics analyzer: %v\n", err)
 		os.Exit(1)
@@ -51,7 +58,12 @@ func main() {
 
 	var trafficManager controller.TrafficManager
 	if useIstio {
-		trafficManager = traffic.NewNginxTrafficManager(clientset)
+		istioClient, err := traffic.NewIstioClient(config)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create Istio client: %v\n", err)
+			os.Exit(1)
+		}
+		trafficManager = traffic.NewIstioTrafficManager(istioClient)
 	} else {
 		trafficManager = traffic.NewNginxTrafficManager(clientset)
 	}
@@ -66,6 +78,7 @@ func main() {
 		decisionEngine,
 		rollbackManager,
 	)
+	canaryController.SetDynamicClient(dynamicClient)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

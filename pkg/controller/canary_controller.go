@@ -2,20 +2,24 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	deployv1alpha1 "github.com/codefarmer009/codedance/pkg/apis/deploy/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type ActionType string
 
 const (
-	ContinueAction  ActionType = "continue"
-	PauseAction     ActionType = "pause"
-	RollbackAction  ActionType = "rollback"
+	ContinueAction ActionType = "continue"
+	PauseAction    ActionType = "pause"
+	RollbackAction ActionType = "rollback"
 )
 
 type Decision struct {
@@ -24,8 +28,15 @@ type Decision struct {
 	Score  int
 }
 
+var canaryGVR = schema.GroupVersionResource{
+	Group:    "deploy.codedance.io",
+	Version:  "v1alpha1",
+	Resource: "canarydeployments",
+}
+
 type CanaryController struct {
 	clientset       *kubernetes.Clientset
+	dynamicClient   dynamic.Interface
 	trafficManager  TrafficManager
 	metricsAnalyzer MetricsAnalyzer
 	decisionEngine  DecisionEngine
@@ -46,6 +57,10 @@ func NewCanaryController(
 		decisionEngine:  decisionEngine,
 		rollbackManager: rollbackManager,
 	}
+}
+
+func (c *CanaryController) SetDynamicClient(client dynamic.Interface) {
+	c.dynamicClient = client
 }
 
 func (c *CanaryController) Run(ctx context.Context) error {
@@ -117,7 +132,7 @@ func (c *CanaryController) progressToNextStep(ctx context.Context, canary *deplo
 
 	canary.Status.CurrentStep = nextStep
 	canary.Status.CurrentWeight = weight
-	canary.Status.LastUpdateTime = v1.Now()
+	canary.Status.LastUpdateTime = metav1.Now()
 
 	return c.updateStatus(ctx, canary)
 }
@@ -135,9 +150,67 @@ func (c *CanaryController) finalizeDeployment(ctx context.Context, canary *deplo
 }
 
 func (c *CanaryController) listCanaryDeployments(ctx context.Context) ([]*deployv1alpha1.CanaryDeployment, error) {
-	return nil, nil
+	if c.dynamicClient == nil {
+		return nil, fmt.Errorf("dynamic client not initialized")
+	}
+
+	list, err := c.dynamicClient.Resource(canaryGVR).Namespace("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list canary deployments: %w", err)
+	}
+
+	canaries := make([]*deployv1alpha1.CanaryDeployment, 0, len(list.Items))
+	for _, item := range list.Items {
+		canary := &deployv1alpha1.CanaryDeployment{}
+		if err := convertUnstructuredToCanary(&item, canary); err != nil {
+			fmt.Printf("failed to convert canary %s: %v\n", item.GetName(), err)
+			continue
+		}
+		canaries = append(canaries, canary)
+	}
+
+	return canaries, nil
 }
 
 func (c *CanaryController) updateStatus(ctx context.Context, canary *deployv1alpha1.CanaryDeployment) error {
+	if c.dynamicClient == nil {
+		return fmt.Errorf("dynamic client not initialized")
+	}
+
+	unstructuredCanary, err := convertCanaryToUnstructured(canary)
+	if err != nil {
+		return fmt.Errorf("failed to convert canary to unstructured: %w", err)
+	}
+
+	_, err = c.dynamicClient.Resource(canaryGVR).
+		Namespace(canary.Namespace).
+		UpdateStatus(ctx, unstructuredCanary, metav1.UpdateOptions{})
+
+	if err != nil {
+		return fmt.Errorf("failed to update status: %w", err)
+	}
+
 	return nil
+}
+
+func convertUnstructuredToCanary(u *unstructured.Unstructured, canary *deployv1alpha1.CanaryDeployment) error {
+	data, err := u.MarshalJSON()
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, canary)
+}
+
+func convertCanaryToUnstructured(canary *deployv1alpha1.CanaryDeployment) (*unstructured.Unstructured, error) {
+	data, err := json.Marshal(canary)
+	if err != nil {
+		return nil, err
+	}
+
+	u := &unstructured.Unstructured{}
+	if err := u.UnmarshalJSON(data); err != nil {
+		return nil, err
+	}
+
+	return u, nil
 }

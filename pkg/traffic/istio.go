@@ -8,7 +8,12 @@ import (
 	"istio.io/client-go/pkg/apis/networking/v1beta1"
 	versionedclient "istio.io/client-go/pkg/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 )
+
+func NewIstioClient(config *rest.Config) (versionedclient.Interface, error) {
+	return versionedclient.NewForConfig(config)
+}
 
 type IstioTrafficManager struct {
 	istioClient versionedclient.Interface
