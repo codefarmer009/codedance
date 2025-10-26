@@ -119,11 +119,19 @@ func (c *CanaryController) progressToNextStep(ctx context.Context, canary *deplo
 	currentStep := canary.Status.CurrentStep
 	totalSteps := len(canary.Spec.Strategy.Steps)
 
+	if totalSteps == 0 {
+		return fmt.Errorf("no deployment steps defined")
+	}
+
 	if currentStep >= totalSteps-1 {
 		return c.finalizeDeployment(ctx, canary)
 	}
 
 	nextStep := currentStep + 1
+	if nextStep >= totalSteps {
+		return fmt.Errorf("next step %d exceeds total steps %d", nextStep, totalSteps)
+	}
+
 	weight := canary.Spec.Strategy.Steps[nextStep].Weight
 
 	if err := c.trafficManager.UpdateWeight(ctx, canary, weight); err != nil {

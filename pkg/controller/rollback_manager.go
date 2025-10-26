@@ -35,6 +35,7 @@ func (r *DefaultRollbackManager) Rollback(ctx context.Context, canary *deployv1a
 	canary.Status.Phase = "Failed"
 	canary.Status.Reason = reason
 	canary.Status.CurrentWeight = 0
+	canary.Status.LastUpdateTime = metav1.Now()
 
 	return nil
 }

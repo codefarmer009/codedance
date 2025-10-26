@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	deployv1alpha1 "github.com/codefarmer009/codedance/pkg/apis/deploy/v1alpha1"
@@ -81,7 +80,8 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCanaryList(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
 
 	list, err := dynClient.Resource(canaryGVR).Namespace("").List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -92,7 +92,9 @@ func handleCanaryList(w http.ResponseWriter, r *http.Request) {
 	canaries := make([]map[string]interface{}, 0)
 	for _, item := range list.Items {
 		canary := convertToCanaryInfo(&item)
-		canaries = append(canaries, canary)
+		if canary != nil {
+			canaries = append(canaries, canary)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -108,7 +110,9 @@ func handleCanaryDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
 	item, err := dynClient.Resource(canaryGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get canary: %v", err), http.StatusInternalServerError)
@@ -149,8 +153,17 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func convertToCanaryInfo(u *unstructured.Unstructured) map[string]interface{} {
-	spec, _, _ := unstructured.NestedMap(u.Object, "spec")
-	status, _, _ := unstructured.NestedMap(u.Object, "status")
+	spec, _, err := unstructured.NestedMap(u.Object, "spec")
+	if err != nil {
+		log.Printf("Warning: failed to get spec for %s: %v", u.GetName(), err)
+		spec = make(map[string]interface{})
+	}
+
+	status, _, err := unstructured.NestedMap(u.Object, "status")
+	if err != nil {
+		log.Printf("Warning: failed to get status for %s: %v", u.GetName(), err)
+		status = make(map[string]interface{})
+	}
 
 	return map[string]interface{}{
 		"name":          u.GetName(),

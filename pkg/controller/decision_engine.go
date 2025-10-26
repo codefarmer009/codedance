@@ -26,7 +26,14 @@ func (d *DefaultDecisionEngine) Evaluate(metrics *HealthMetrics, thresholds depl
 		}
 	}
 
-	maxLatencyP99, _ := time.ParseDuration(thresholds.Latency.P99)
+	maxLatencyP99, err := time.ParseDuration(thresholds.Latency.P99)
+	if err != nil {
+		return Decision{
+			Action: PauseAction,
+			Reason: fmt.Sprintf("无法解析P99延迟阈值 %s: %v", thresholds.Latency.P99, err),
+		}
+	}
+
 	if metrics.Latency.P99 <= maxLatencyP99 {
 		score += 30
 	} else if metrics.Latency.P99 <= time.Duration(float64(maxLatencyP99)*1.2) {
