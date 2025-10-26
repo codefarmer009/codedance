@@ -12,6 +12,7 @@ import (
 type DefaultRollbackManager struct {
 	clientset      *kubernetes.Clientset
 	trafficManager TrafficManager
+	controller     *CanaryController
 }
 
 func NewDefaultRollbackManager(clientset *kubernetes.Clientset, trafficManager TrafficManager) *DefaultRollbackManager {
@@ -19,6 +20,10 @@ func NewDefaultRollbackManager(clientset *kubernetes.Clientset, trafficManager T
 		clientset:      clientset,
 		trafficManager: trafficManager,
 	}
+}
+
+func (r *DefaultRollbackManager) SetController(controller *CanaryController) {
+	r.controller = controller
 }
 
 func (r *DefaultRollbackManager) Rollback(ctx context.Context, canary *deployv1alpha1.CanaryDeployment, reason string) error {
@@ -36,6 +41,12 @@ func (r *DefaultRollbackManager) Rollback(ctx context.Context, canary *deployv1a
 	canary.Status.Reason = reason
 	canary.Status.CurrentWeight = 0
 	canary.Status.LastUpdateTime = metav1.Now()
+
+	if r.controller != nil {
+		if err := r.controller.updateStatus(ctx, canary); err != nil {
+			return fmt.Errorf("update rollback status: %w", err)
+		}
+	}
 
 	return nil
 }

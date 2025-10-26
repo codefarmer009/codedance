@@ -158,7 +158,13 @@ func (m *PrometheusAnalyzer) queryPodHealth(ctx context.Context, canary *deployv
 		}, nil
 	}
 
-	selector := fmt.Sprintf("app=%s,version=%s", canary.Spec.TargetDeployment, canary.Spec.CanaryVersion)
+	deploymentName := canary.Spec.TargetDeployment + "-canary"
+	deployment, err := m.clientset.AppsV1().Deployments(canary.Namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+	if err != nil {
+		return controller.PodHealthMetrics{}, fmt.Errorf("failed to get canary deployment: %w", err)
+	}
+
+	selector := metav1.FormatLabelSelector(deployment.Spec.Selector)
 	pods, err := m.clientset.CoreV1().Pods(canary.Namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: selector,
 	})

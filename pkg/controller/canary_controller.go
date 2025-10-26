@@ -80,13 +80,16 @@ func (c *CanaryController) Run(ctx context.Context) error {
 }
 
 func (c *CanaryController) reconcile(ctx context.Context) error {
-	canaries, err := c.listCanaryDeployments(ctx)
+	reconcileCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+
+	canaries, err := c.listCanaryDeployments(reconcileCtx)
 	if err != nil {
 		return err
 	}
 
 	for _, canary := range canaries {
-		if err := c.processCanary(ctx, canary); err != nil {
+		if err := c.processCanary(reconcileCtx, canary); err != nil {
 			fmt.Printf("process canary %s failed: %v\n", canary.Name, err)
 			continue
 		}
@@ -96,6 +99,20 @@ func (c *CanaryController) reconcile(ctx context.Context) error {
 }
 
 func (c *CanaryController) processCanary(ctx context.Context, canary *deployv1alpha1.CanaryDeployment) error {
+	if canary.Status.Phase == "" {
+		canary.Status.Phase = "Initializing"
+		canary.Status.CurrentStep = 0
+		canary.Status.CurrentWeight = 0
+		canary.Status.LastUpdateTime = metav1.Now()
+		if err := c.updateStatus(ctx, canary); err != nil {
+			return fmt.Errorf("initialize canary status: %w", err)
+		}
+	}
+
+	if len(canary.Spec.Strategy.Steps) == 0 {
+		return fmt.Errorf("no deployment steps defined in strategy")
+	}
+
 	metrics, err := c.metricsAnalyzer.Collect(ctx, canary)
 	if err != nil {
 		return fmt.Errorf("collect metrics: %w", err)

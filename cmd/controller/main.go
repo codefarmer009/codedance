@@ -79,6 +79,7 @@ func main() {
 		rollbackManager,
 	)
 	canaryController.SetDynamicClient(dynamicClient)
+	rollbackManager.SetController(canaryController)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
