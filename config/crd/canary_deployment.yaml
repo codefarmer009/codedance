@@ -1,0 +1,142 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: canarydeployments.deploy.codedance.io
+spec:
+  group: deploy.codedance.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - targetDeployment
+                - canaryVersion
+                - strategy
+                - metrics
+              properties:
+                targetDeployment:
+                  type: string
+                  description: "目标 Deployment 名称"
+                canaryVersion:
+                  type: string
+                  description: "灰度版本镜像"
+                strategy:
+                  type: object
+                  required:
+                    - type
+                    - steps
+                  properties:
+                    type:
+                      type: string
+                      enum: [Linear, Exponential, Manual]
+                    steps:
+                      type: array
+                      items:
+                        type: object
+                        required:
+                          - weight
+                          - pause
+                        properties:
+                          weight:
+                            type: integer
+                            minimum: 0
+                            maximum: 100
+                          pause:
+                            type: string
+                          metrics:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                name:
+                                  type: string
+                                threshold:
+                                  type: number
+                metrics:
+                  type: object
+                  required:
+                    - successRate
+                    - latency
+                    - errorRate
+                  properties:
+                    successRate:
+                      type: object
+                      required:
+                        - threshold
+                      properties:
+                        threshold:
+                          type: number
+                        query:
+                          type: string
+                    latency:
+                      type: object
+                      required:
+                        - p99
+                      properties:
+                        p99:
+                          type: string
+                        query:
+                          type: string
+                    errorRate:
+                      type: object
+                      required:
+                        - threshold
+                      properties:
+                        threshold:
+                          type: number
+                        query:
+                          type: string
+                autoRollback:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    onMetricsFail:
+                      type: boolean
+                    onPodCrash:
+                      type: boolean
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                currentStep:
+                  type: integer
+                currentWeight:
+                  type: integer
+                reason:
+                  type: string
+                lastUpdateTime:
+                  type: string
+                  format: date-time
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+      subresources:
+        status: {}
+  scope: Namespaced
+  names:
+    plural: canarydeployments
+    singular: canarydeployment
+    kind: CanaryDeployment
+    shortNames:
+      - cd

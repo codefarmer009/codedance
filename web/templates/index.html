@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Codedance 发布管理平台</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🚀 Codedance 发布管理平台</h1>
+            <p class="subtitle">Kubernetes 智能灰度发布系统</p>
+        </header>
+
+        <div class="summary-cards">
+            <div class="card">
+                <div class="card-icon">📊</div>
+                <div class="card-content">
+                    <h3 id="total-canaries">0</h3>
+                    <p>总发布任务</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-icon">✅</div>
+                <div class="card-content">
+                    <h3 id="completed-canaries">0</h3>
+                    <p>已完成</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-icon">⚡</div>
+                <div class="card-content">
+                    <h3 id="progressing-canaries">0</h3>
+                    <p>进行中</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-icon">⏸️</div>
+                <div class="card-content">
+                    <h3 id="paused-canaries">0</h3>
+                    <p>已暂停</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <aside class="sidebar">
+                <h2>灰度发布列表</h2>
+                <div class="filter-controls">
+                    <input type="text" id="search-input" placeholder="搜索发布任务...">
+                    <select id="status-filter">
+                        <option value="">全部状态</option>
+                        <option value="Progressing">进行中</option>
+                        <option value="Paused">已暂停</option>
+                        <option value="Completed">已完成</option>
+                        <option value="Failed">失败</option>
+                    </select>
+                </div>
+                <ul id="canary-list" class="canary-list">
+                    <li class="loading">加载中...</li>
+                </ul>
+            </aside>
+
+            <main class="content">
+                <div id="detail-view" class="detail-view">
+                    <div class="welcome-message">
+                        <h2>👈 选择一个发布任务查看详情</h2>
+                        <p>点击左侧列表中的任何发布任务以查看详细信息和实时指标</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
