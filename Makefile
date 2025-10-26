@@ -1,12 +1,14 @@
-.PHONY: help build install test clean controller docker-build docker-push deploy
+.PHONY: help build install test clean controller dashboard docker-build docker-push deploy
 
 BINARY_NAME=codedance-controller
+DASHBOARD_BINARY=codedance-dashboard
 DOCKER_IMAGE=codedance-controller
 VERSION?=latest
 
 help:
 	@echo "Available targets:"
 	@echo "  build          - Build the controller binary"
+	@echo "  dashboard      - Build and run the dashboard"
 	@echo "  install        - Install CRDs to the cluster"
 	@echo "  test           - Run tests"
 	@echo "  clean          - Clean build artifacts"
@@ -18,6 +20,14 @@ help:
 build:
 	@echo "Building controller..."
 	go build -o bin/$(BINARY_NAME) cmd/controller/main.go
+
+build-dashboard:
+	@echo "Building dashboard..."
+	go build -o bin/$(DASHBOARD_BINARY) cmd/dashboard/main.go
+
+dashboard: build-dashboard
+	@echo "Starting dashboard on http://localhost:8080"
+	./bin/$(DASHBOARD_BINARY) --kubeconfig=$(HOME)/.kube/config
 
 install:
 	@echo "Installing CRDs..."
