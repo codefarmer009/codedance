@@ -10,12 +10,12 @@ import (
 )
 
 type DefaultRollbackManager struct {
-	clientset      *kubernetes.Clientset
+	clientset      kubernetes.Interface
 	trafficManager TrafficManager
 	controller     *CanaryController
 }
 
-func NewDefaultRollbackManager(clientset *kubernetes.Clientset, trafficManager TrafficManager) *DefaultRollbackManager {
+func NewDefaultRollbackManager(clientset kubernetes.Interface, trafficManager TrafficManager) *DefaultRollbackManager {
 	return &DefaultRollbackManager{
 		clientset:      clientset,
 		trafficManager: trafficManager,
